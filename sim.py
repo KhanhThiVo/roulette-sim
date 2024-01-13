@@ -4,120 +4,121 @@ import matplotlib.pyplot as plt
 from joblib import Parallel, delayed
 import plotly.express as px
 
-roulette_numbers_ordered_corrected = [
-    '00G', '28B', '09R', '26B', '30R', '11B', '07R', '20B', '32R', '17B', '05R','22B', '34R', '15B', '03R', '24B',
-    '36R', '13B', '01R',
-    '37G', '27R', '10B', '25R', '29B', '12R', '08B', '19R', '31B', '18R', '06B', '21R', '33B','16R', '04B', '23R',
-    '35B', '14R', '02B'
-]
-# def spin_roulette_wheel():
-#     results =[]
-#     for i in range(1,1001):
-#         result = random.choice(roulette_numbers_ordered_corrected)
-#         number = int(''.join(filter(str.isdigit, result)))
-#         color = ''.join(filter(str.isalpha, result))
-#         results.append({
-#         'Index': i,
-#         'Result': result,
-#         'Number': number,
-#         'Letter': color
-#         })
-#     df = pd.DataFrame(results)
-#     return df
-
-def generate_random_choice(index):
-    result = random.choice(roulette_numbers_ordered_corrected)
-    number = int(''.join(filter(str.isdigit, result)))
-    color = ''.join(filter(str.isalpha, result))
-
-    return {
-        'index': index,
-        'result': result,
-        'number': number,
-        'color': color
-    }
-#
-# def spin_roulette_wheel_parallel(n):
-#     # Use Parallel to generate random choices in parallel
-#     results = Parallel(n_jobs=-1)(delayed(generate_random_choice)(i) for i in range(1, n+1))
-#
-#     df = pd.DataFrame(results)
-#     return df
-#
-# df=spin_roulette_wheel_parallel(50000000)
-#
-# plt.hist(df['color'], bins='auto', alpha=0.7, rwidth=0.85)
-# plt.title('Distribution of Numbers in Roulette Wheel Simulation')
-# plt.xlabel('Number')
-# plt.ylabel('Frequency')
-# plt.show()
+from roulette_agent import RouletteAgent
 
 
+class RouletteSim:
+    """
+    Class to simulate Roulette table
+    """
+    def __init__(self, wheel: list, n_spins: int, agent: RouletteAgent, bet_amount: int):
+        self.wheel = wheel
+        self.agent = agent
+        self.n_spins = n_spins
+        self.bet_amount = bet_amount
+        self.final_budget = -1
 
-def spin_roulette_wheel_parallel(initial_budget, bet_amount, consecutive_threshold, spins):
-    budget = initial_budget
-    consecutive_count = 0
-    budget_history= []
-    print(f"Initial budget: {initial_budget}")
-    bet = 0
-    spin_count = 0
-    bet_count = 0
-    results = Parallel(n_jobs=-1)(delayed(generate_random_choice)(i) for i in range(1, spins + 1))
+    def generate_random_choice(self, index) -> dict:
+        """
+        Generate random choice from wheel
+        :param index: index of spin
+        :return: result of spin as dict
+        """
+        result = random.choice(self.wheel)
+        number = int(result[:-1])
+        color = result[-1]
 
-    for index, result_dict in enumerate(results):
-        spin_count += 1
-        print(f"SpinCount: {spin_count}")
-        print(f"Bet Count: {bet_count}")
-        result = result_dict['color']
-        print(f"RESULT {result}")
-        if index == 0:
-            result_to_check = result
-        if index != 0 :
-            print(f"BET: {bet}")
-            if bet == result:
-                print(bet == result)
-                budget = budget + (bet_amount * 2)
-            print(f"Budget: {budget}")
+        return {
+            'index': index,
+            'result': result,
+            'number': number,
+            'color': color
+        }
+
+    def spin_roulette_wheel_parallel(self):
+        """
+        Run simulation roulette spins
+        :return:
+        """
+        results = Parallel(n_jobs=-1)(delayed(self.generate_random_choice)(i) for i in range(1, self.n_spins + 1))
+
+        for index, result_dict in enumerate(results):
+            self.agent.play(result_dict=result_dict, bet_amount=self.bet_amount)
+
+        print(f"{self.n_spins} over")
+        budget_history = self.agent.get_budget_history()
+
+        self.final_budget = budget_history[-1]
+
+    def plot_budget_history(self):
+        """
+        Plot budget history of agent
+        """
+        budget_history = self.agent.get_budget_history()
+        # Visualize the results with Matplotlib
+        fig = px.line(x=range(1, len(budget_history) + 1), y=budget_history, labels={'x': 'Round', 'y': 'Budget'},
+                      title='Roulette Wheel Simulation with Betting',
+                      line_shape='linear')
+
+        fig.update_layout(xaxis_title='Round', yaxis_title='Budget', legend_title='Legend')
+        fig.show()
+
+    def get_final_budget(self):
+        """
+        Return remaining budget
+        :return: self.final_budget
+        """
+        return self.final_budget
 
 
-            print(f"Previous result {result_to_check}")
-            if result == result_to_check:
-                consecutive_count += 1
-            else:
-                consecutive_count = 0
-            print(f"Consecutive {consecutive_count}")
-            result_to_check = result
-            if (consecutive_count == consecutive_threshold or consecutive_count > consecutive_threshold) \
-                    and  consecutive_count <= 4 and budget >= bet_amount:
-                budget -= bet_amount
-                bet_count +=1
-                if result == "R":
-                    bet = "B"
-                elif result =="B":
-                    bet = "R"
-            else:
-                bet = "NO BET"
-            budget_history.append(budget)
+def sim_roulette(echo: bool = False):
+    """
+    Run roulette simulation
+    :return: final budget of  run
+    """
+    initial_budget = 50
+    bet_amount = 5
+    consecutive_threshold = 2
+    agent = RouletteAgent(
+        init_budget=initial_budget,
+        consecutive_threshold=consecutive_threshold,
+        echo=echo,
+    )
 
-        print(100 * "-")
-    return budget_history
+    spins = 1000
+    roulette_numbers_ordered_corrected = [
+        '00G', '28B', '09R', '26B', '30R', '11B', '07R', '20B', '32R', '17B', '05R', '22B', '34R', '15B', '03R', '24B',
+        '36R', '13B', '01R',
+        '37G', '27R', '10B', '25R', '29B', '12R', '08B', '19R', '31B', '18R', '06B', '21R', '33B', '16R', '04B', '23R',
+        '35B', '14R', '02B'
+    ]
+    roulette_sim = RouletteSim(
+        wheel=roulette_numbers_ordered_corrected,
+        n_spins=spins,
+        agent=agent,
+        bet_amount=bet_amount
+    )
 
-# Set the parameters
-initial_budget = 50
-bet_amount = 5
-consecutive_threshold = 2
-spins = 1000
+    # Run sim
+    roulette_sim.spin_roulette_wheel_parallel()
 
-# Run the simulation
-budget_history = spin_roulette_wheel_parallel(initial_budget, bet_amount, consecutive_threshold, spins)
+    # Plot budget history, uncomment if needed
+    # roulette_sim.plot_budget_history()
+    remaining_budget = roulette_sim.get_final_budget()
+    print(f"Remaining budget: {remaining_budget}")
 
-# Visualize the results with Matplotlib
-fig = px.line(x=range(1, len(budget_history) + 1), y=budget_history, labels={'x': 'Round', 'y': 'Budget'},
-              title='Roulette Wheel Simulation with Betting',
-              line_shape='linear')
+    return remaining_budget
 
-fig.update_layout(xaxis_title='Round', yaxis_title='Budget', legend_title='Legend')
-fig.show()
+
+if __name__ == '__main__':
+    n_simulations = 10
+    final_budgets = []
+    for s in range(n_simulations):
+        fb = sim_roulette()
+        final_budgets.append(fb)
+    plt.plot(final_budgets)
+    plt.show()
+
 
 
 
